@@ -2,13 +2,15 @@
 #include "slider.hpp"
 #include "button.hpp"
 #include <math.h>
+#include <iostream>
 
 const TPixel BG_COLOR = tigrRGB(200, 200, 200);
 
 enum DRAWING_MODE{
     LINE,
     CIRCLE,
-    SQUARE
+    RECT,
+    FILL
 };
 
 constexpr int clamp(int min, int max, int n){
@@ -29,6 +31,22 @@ void fillRectange(Tigr * bmp, int x0, int y0, int x1, int y1, TPixel c){
     tigrFill(bmp, x, y, w, h, c);
 }
 
+constexpr bool eq(TPixel t1, TPixel t2){
+    return t1.r == t2.r && t1.g == t2.g && t1.b == t2.b && t1.a == t2.a;
+}
+
+TPixel currentColor;
+TPixel newColor;
+void spreadFill(Tigr * bmp, int x, int y){
+    if (!eq(bmp->pix[y*bmp->w + x], currentColor)) return;
+    bmp->pix[y*bmp->w + x] = newColor;
+    
+    if (y > 0) spreadFill(bmp, x, y-1);
+    if (y < bmp->h) spreadFill(bmp, x, y+1);
+    if (x < bmp->w) spreadFill(bmp, x+1, y);
+    if (x > 0) spreadFill(bmp, x-1, y);
+}
+
 void paint(Tigr * screen, Tigr * painting, TPixel color, DRAWING_MODE d, int mx, int my, int buttons){
     switch(d){
         case DRAWING_MODE::LINE: {
@@ -40,7 +58,7 @@ void paint(Tigr * screen, Tigr * painting, TPixel color, DRAWING_MODE d, int mx,
                 ly = my;
                 break;
         }
-        case DRAWING_MODE::SQUARE: {
+        case DRAWING_MODE::RECT: {
             static int px, py;
             static bool selected = false;
             if ((buttons & 1) && !selected){
@@ -76,6 +94,15 @@ void paint(Tigr * screen, Tigr * painting, TPixel color, DRAWING_MODE d, int mx,
             }
             break;
         }
+        case DRAWING_MODE::FILL: {
+            if ((buttons & 1) && (0 < mx && mx < 320 && 0 < my && my < 320)){
+                currentColor = painting->pix[(my*painting->w) + mx];
+                newColor = color;
+                if (eq(currentColor, newColor)) return;
+                spreadFill(painting, mx, my);
+            }
+            break;
+        }
     }
 }
 
@@ -98,7 +125,24 @@ int main(void){
         *color = tigrRGB(*static_cast<char*>(args[1]), *static_cast<char*>(args[2]), *static_cast<char*>(args[3]));
     });
 
-    DRAWING_MODE d = DRAWING_MODE::CIRCLE;
+    Button lineModeButton(330, 80, "LINE");
+    lineModeButton.setFunction([](std::vector<void*> args){
+        *static_cast<DRAWING_MODE*>(args[0]) = DRAWING_MODE::LINE;
+    });
+    Button rectModeButton(370, 80, "RECT");
+    rectModeButton.setFunction([](std::vector<void*> args){
+        *static_cast<DRAWING_MODE*>(args[0]) = DRAWING_MODE::RECT;
+    });
+    Button circleModeButton(410, 80, "CIRCLE");
+    circleModeButton.setFunction([](std::vector<void*> args){
+        *static_cast<DRAWING_MODE*>(args[0]) = DRAWING_MODE::CIRCLE;
+    });
+    Button fillModeButton(464, 80, "FILL");
+    fillModeButton.setFunction([](std::vector<void*> args){
+        *static_cast<DRAWING_MODE*>(args[0]) = DRAWING_MODE::FILL;
+    });
+
+    DRAWING_MODE d = DRAWING_MODE::LINE;
 
     TPixel currentColor = tigrRGB(127, 127, 127);
 
@@ -126,6 +170,15 @@ int main(void){
 
         saveColorButton.update(screen, {&currentColor, &r, &g, &b});
         saveColorButton.draw(screen);
+
+        lineModeButton.update(screen, {&d});
+        lineModeButton.draw(screen);
+        rectModeButton.update(screen, {&d});
+        rectModeButton.draw(screen);
+        circleModeButton.update(screen, {&d});
+        circleModeButton.draw(screen);
+        fillModeButton.update(screen, {&d});
+        fillModeButton.draw(screen);
 
         tigrPrint(screen, tfont, 610, 5, RED, "RED: %d", r);
         tigrPrint(screen, tfont, 610, 20, GREEN, "GREEN: %d", g);
